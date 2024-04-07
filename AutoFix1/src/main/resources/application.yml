@@ -1,0 +1,15 @@
+server:
+  port: 6080
+
+spring:
+  application:
+    name: AutoFix1
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+  datasource:
+    url: jdbc:mysql://localhost:3306/autofix1
+    username: root
+    password: 1234
+
