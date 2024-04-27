@@ -16,4 +16,18 @@ public class VehiculoService {
     {
         return vehiculoRepository.findAll();
     }
+
+    public void nuevoVehiculo(VehiculoEntity vehiculoEntity)
+    {
+        vehiculoRepository.save(vehiculoEntity);
+    }
+
+    public VehiculoEntity obtenerPorID(Integer id)
+    {
+        return vehiculoRepository.getReferenceById(id);
+
+    }
+
+
+
 }

@@ -4,9 +4,7 @@ import MTISW.AutoFix1.Entities.VehiculoEntity;
 import MTISW.AutoFix1.Services.VehiculoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -26,5 +24,12 @@ public class VehiculoController {
         else {
             return ResponseEntity.noContent().build();
         }
+    }
+
+    @PostMapping("/agregar")
+    public ResponseEntity<String> agregarVehiculo(@RequestBody VehiculoEntity vehiculoEntity)
+    {
+        vehiculoService.nuevoVehiculo(vehiculoEntity);
+        return ResponseEntity.ok("Vehiculo agregado con exito");
     }
 }
