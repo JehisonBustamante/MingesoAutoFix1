@@ -17,7 +17,7 @@ public class VehiculoController {
     @GetMapping("/registros")
     public ResponseEntity<List<VehiculoEntity>> registros()
     {
-        if(vehiculoService.obtenerTodos() == null)
+        if(vehiculoService.obtenerTodos() != null)
         {
             return ResponseEntity.ok(vehiculoService.obtenerTodos());
         }

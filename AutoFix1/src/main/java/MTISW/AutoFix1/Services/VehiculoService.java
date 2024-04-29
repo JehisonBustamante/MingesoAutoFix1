@@ -25,7 +25,15 @@ public class VehiculoService {
     public VehiculoEntity obtenerPorID(Integer id)
     {
         return vehiculoRepository.getReferenceById(id);
+    }
 
+    public List<VehiculoEntity> todasPorMarca(String marca)
+    {
+        return vehiculoRepository.findAllByMarca(marca);
+    }
+
+    public List<VehiculoEntity> todosPorMotor(String motor){
+        return vehiculoRepository.findAllByMotor(motor);
     }
 
 

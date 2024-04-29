@@ -4,6 +4,7 @@ import MTISW.AutoFix1.Entities.ReparacionEntity;
 import MTISW.AutoFix1.Entities.VehiculoEntity;
 import MTISW.AutoFix1.Repositories.ReparacionRepository;
 import MTISW.AutoFix1.Repositories.VehiculoRepository;
+import jakarta.persistence.criteria.CriteriaBuilder;
 import lombok.Data;
 import org.hibernate.grammars.hql.HqlParser;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,9 +14,9 @@ import org.springframework.stereotype.Service;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.List;
-import java.util.Objects;
-import java.util.Random;
+import java.time.Period;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class ReparacionService {
@@ -110,16 +111,24 @@ public class ReparacionService {
     ////////////////////////////////////// COSTO TOTAL ////////////////////////////////////////
 
     //Calculo del costo completo
-    public Double costoTotal(ReparacionEntity reparacionEntity) {
-        Integer todasReparaciones = contarReparaciones(reparacionEntity.getIdVehiculo());
-        double suma = 0.00;
-        if(todasReparaciones>1) {
-            List<ReparacionEntity> listaReparaciones = reparacionRepository.findAllByIdVehiculo(reparacionEntity.getIdVehiculo());
+    public Double costoTotal(Integer idVehiculo) {
+        double suma;
+        ReparacionEntity reparacionEntity = reparacionRepository.getReferenceById(idVehiculo);
+        suma = montoTotal(reparacionEntity.getIdVehiculo()).doubleValue();
+        double bonos = descuentoBonos(idVehiculo).doubleValue();
+        return ((suma + recargoTotal(reparacionEntity) - descuentoTotal(reparacionEntity)) - bonos)*1.19;}
+
+
+    //Calculo del monto total de las reparaciones
+    public Integer montoTotal(Integer idVehiculo) {
+        Integer monto = 0;
+        List<ReparacionEntity> listaReparaciones = reparacionRepository.findAllByIdVehiculo(idVehiculo);
+        if(listaReparaciones.isEmpty()) {
+            return 0;}
+        else{
             for (ReparacionEntity listaReparacione : listaReparaciones) {
-                suma = listaReparacione.getMontoReparacion().doubleValue();}}
-        else {
-            suma = reparacionEntity.getMontoReparacion().doubleValue();}
-        return (suma + recargoTotal(reparacionEntity) - descuentoTotal(reparacionEntity))*1.19;}
+                monto = monto + listaReparacione.getMontoReparacion();}}
+        return monto;}
 
     ////////////////////////////////////////////////////////////////////////////////////////////
     /////////////////////////////////////// RECARGOS ///////////////////////////////////////////
@@ -282,8 +291,7 @@ public class ReparacionService {
     {
         Double reparaciones = descuentoDeReparaciones(reparacionEntity.getIdVehiculo(), reparacionEntity.getTipoReparacion());
         Double diaAtencion = descuentoDiaAtencion(reparacionEntity.getFechaReparacion(), reparacionEntity.getHoraReparacion());
-        Double bonos = descuentoBonos(reparacionEntity.getTipoReparacion()).doubleValue();
-        return (reparaciones + diaAtencion + bonos);
+        return (reparaciones + diaAtencion);
     }
 
     //El descuento completo de las reparaciones
@@ -365,10 +373,12 @@ public class ReparacionService {
             return 0.23;}
     }
 
+    // Método que realiza descuentos en funcion de el dia y la hora de atencion
     public Double descuentoDiaAtencion(LocalDate fechaIngreso, LocalTime horaIngreso)
     {
         if(fechaIngreso.getDayOfWeek() == DayOfWeek.MONDAY || fechaIngreso.getDayOfWeek() == DayOfWeek.THURSDAY)
         {
+            //Se indica que sea menor o igual a 11 debido a que al ser igual a 11 abarca todos los minutos hasta 11:59
             if(horaIngreso.getHour() >= 9 && horaIngreso.getHour() <= 11)
             {
                 return 0.10;
@@ -380,8 +390,11 @@ public class ReparacionService {
         return 0.00;
     }
 
-    public Integer descuentoBonos(String marca)
+    // Se utiliza el ejemplo para descuento por bonos
+    public Integer descuentoBonos(Integer idVehiculo)
     {
+        VehiculoEntity vehiculoEntity = vehiculoService.obtenerPorID(idVehiculo);
+        String marca = vehiculoEntity.getMarca();
         return switch (marca) {
             case "Toyota" -> 70000;
             case "Ford" -> 50000;
@@ -390,4 +403,163 @@ public class ReparacionService {
             default -> 0;
         };
     }
+
+
+    // CALCULANDO R1 //
+
+    public List<Double> reporteValoresFormula(Integer idVehiculo)
+    {
+        ReparacionEntity reparacionEntity = reparacionRepository.getReferenceById(idVehiculo);
+        Double recargos = recargoTotal(reparacionEntity);
+        Double descuentos = descuentoTotal(reparacionEntity);
+        //OBTENER TODAS LAS REPARACIONES ASOCIADAS AL VEHICULO
+        Double monto = montoTotal(idVehiculo).doubleValue();
+        List<Double> valoresPorVehiculo = new ArrayList<>();
+        valoresPorVehiculo.add(recargos);
+        valoresPorVehiculo.add(descuentos);
+        valoresPorVehiculo.add(monto);
+        return valoresPorVehiculo;
+    }
+
+
+    // CALCULANDO R2 //
+
+    //Metodo que calcula R2
+    public List<List<?>> reporteReparacionesMontoTotal() {
+        List<List<?>> reporte = new ArrayList<>();
+        List<Integer> listaNumReparacion = new ArrayList<>();
+        List<Integer> listaNumTiposPorReparacion = new ArrayList<>();
+        List<Double> montosTotales = new ArrayList<>();
+        for(int i=1; i<=11;i++) {
+            List<ReparacionEntity> reparacionEntities = reparacionRepository.findAllByReparacionNum(i);
+            listaNumReparacion.add(i);
+            listaNumTiposPorReparacion.add(TiposDeVehiculosReparados(reparacionEntities));
+            montosTotales.add(todosMontos(reparacionEntities));}
+        reporte.add(listaNumReparacion);
+        reporte.add(listaNumTiposPorReparacion);
+        reporte.add(montosTotales);
+        return reporte;}
+
+    //Metodo para calcular el monto total de las reparaciones
+    public Double todosMontos(List<ReparacionEntity> reparacionEntities)
+    {
+        double montos = 0.00;
+        for (ReparacionEntity reparacionEntity : reparacionEntities) {
+            montos = montos + reparacionEntity.getMontoReparacion().doubleValue();
+        }
+        return montos;
+    }
+
+    //Metodo para recuperar una lista de los tipos de vehiculos presentes en una lista de reparaciones (no se repiten)
+    public Integer TiposDeVehiculosReparados(List<ReparacionEntity> reparacionEntities)
+    {
+        List<String> tipoVehiculos = new ArrayList<>();
+        for (ReparacionEntity reparacionEntity : reparacionEntities) {
+            VehiculoEntity vehiculoEntity = vehiculoService.obtenerPorID(reparacionEntity.getIdVehiculo());
+            tipoVehiculos.add(vehiculoEntity.getMotor());
+        }
+        Set<String> tiposUnicosVehiculos = new HashSet<>(tipoVehiculos);
+        return new ArrayList<>(tiposUnicosVehiculos).size();
+    }
+
+
+
+
+    // CALCULANDO R3 //
+
+    // Método que devuelve una lista de promedios en función de una lista de marcas
+    //Ejemplo:
+    //Entrada:  [Toyota, Huyndai, Ford]
+    //Salida: [20.00, 24.50, 29] DIAS PROMEDIO DE DEMORA DE REPARACION
+    public List<Double> promedioPeriodosPorMarca(List<String> marca)
+    {
+        List<Double> promedios = new ArrayList<>();
+        List<List<VehiculoEntity>> vehiculosPorMarca = new ArrayList<>();
+        for (String s : marca) {
+            vehiculosPorMarca.add(vehiculoService.todasPorMarca(s));
+        }
+        for (List<VehiculoEntity> vehiculoEntities : vehiculosPorMarca) {
+            promedios.add(promedioPeriodos(vehiculoEntities));
+        }
+        return promedios;
+    }
+
+    // Método que calcula el promedio de los periodos (en dias) de las reparaciones asociadas a un grupo de vehiculos
+    public Double promedioPeriodos(List<VehiculoEntity> vehiculoEntities)
+    {
+        double promedios = 0.00;
+        int contador=0;
+        for (VehiculoEntity vehiculoEntity : vehiculoEntities) {
+            List<ReparacionEntity> reparacionesPorVehiculo = reparacionRepository.findAllByIdVehiculo(vehiculoEntity.getId());
+            List<Period> periodosPorVehiculo = listaPeriodos(reparacionesPorVehiculo);
+            // Convertir el periodo a periodo en numero de dias
+            int totalDias = periodosPorVehiculo.stream()
+                    .mapToInt(p -> p.getYears() * 365 + p.getMonths() * 30 + p.getDays())
+                    .sum();
+            promedios = promedios + ((double) totalDias / periodosPorVehiculo.size());
+            contador++;
+        }
+        return (promedios/contador);
+    }
+
+    //Método que entrega una lista de periodos
+    public List<Period> listaPeriodos(List<ReparacionEntity> reparacionEntities)
+    {
+        List<Period> periodos = new ArrayList<>();
+        for (ReparacionEntity reparacionEntity : reparacionEntities) {
+            periodos.add(periodo(reparacionEntity.getFechaReparacion(), reparacionEntity.getFechaSalida()));
+        }
+        return periodos;
+    }
+    //Método que calcula el periodo entre una fecha y otra
+    public Period periodo(LocalDate fechaInicio, LocalDate fechaFin)
+    {
+        return Period.between(fechaInicio, fechaFin);
+    }
+
+
+
+    // CALCULANDO R4 //
+    //Metodo que ingresa todos los datos para el reporte, con 9 listas contenidas en el reporte
+    public List<List<?>> reporteReparacionesMotorMonto() {
+        List<List<?>> reporte = new ArrayList<>();
+        List<Integer> listaNumReparacion = new ArrayList<>();
+        List<Integer> listaGasolina = new ArrayList<>();
+        List<Integer> listaDiesel = new ArrayList<>();
+        List<Integer> listaHibrido = new ArrayList<>();
+        List<Integer> listaElectrico = new ArrayList<>();
+        List<Double> montoGasolina = new ArrayList<>();
+        List<Double> montoDiesel = new ArrayList<>();
+        List<Double> montoHibrido = new ArrayList<>();
+        List<Double> montoElectrico = new ArrayList<>();
+        for(int i=1; i<=11;i++) {
+            List<ReparacionEntity> reparacionEntities = reparacionRepository.findAllByReparacionNum(i);
+            listaNumReparacion.add(i);
+            listaGasolina.add(reportesPorMotor(reparacionEntities, "Gasolina").size());
+            listaDiesel.add(reportesPorMotor(reparacionEntities, "Diesel").size());
+            listaHibrido.add(reportesPorMotor(reparacionEntities, "Hibrido").size());
+            listaElectrico.add(reportesPorMotor(reparacionEntities, "Electrico").size());
+            montoGasolina.add(todosMontos(reportesPorMotor(reparacionEntities, "Gasolina")));
+            montoDiesel.add(todosMontos(reportesPorMotor(reparacionEntities, "Diesel")));
+            montoHibrido.add(todosMontos(reportesPorMotor(reparacionEntities, "Hibrido")));
+            montoElectrico.add(todosMontos(reportesPorMotor(reparacionEntities, "Electrico")));}
+        reporte.add(listaNumReparacion);
+        reporte.add(listaGasolina);
+        reporte.add(montoGasolina);
+        reporte.add(listaDiesel);
+        reporte.add(montoDiesel);
+        reporte.add(listaHibrido);
+        reporte.add(montoHibrido);
+        reporte.add(listaElectrico);
+        reporte.add(montoElectrico);
+        return reporte;}
+
+    //Método que filtra la lista de reparaciones en funcion del tipo de reparacion
+    public List<ReparacionEntity> reportesPorMotor(List<ReparacionEntity> reparacionEntities, String motor)
+    {
+        return reparacionEntities.stream()
+                .filter(reparacionEntity -> motor.equals(reparacionEntity.getTipoReparacion()))
+                .collect(Collectors.toList());
+    }
+
 }

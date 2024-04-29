@@ -11,5 +11,9 @@ public interface ReparacionRepository extends JpaRepository<ReparacionEntity, In
 
     List<ReparacionEntity> findAllByIdVehiculo(Integer id);
 
+    List<ReparacionEntity> findAllByReparacionNum(Integer num);
+
+    List<ReparacionEntity> findAllByTipoReparacion(String motor);
+
 
 }

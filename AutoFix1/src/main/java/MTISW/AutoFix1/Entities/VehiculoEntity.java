@@ -24,5 +24,4 @@ public class VehiculoEntity {
     private Integer anio;
     private Integer asientos;
     private Integer kilometraje;
-
 }
